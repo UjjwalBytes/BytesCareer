@@ -13,6 +13,7 @@ export async function updateUser(data) {
     where: { clerkUserId: userId },
   });
 
+
   if (!user) throw new Error("User not found");
 
   try {
@@ -56,7 +57,7 @@ export async function updateUser(data) {
       },
       {
         timeout: 10000, // default: 5000
-      }
+      },
     );
 
     revalidatePath("/");
@@ -74,7 +75,7 @@ export async function getUserOnboardingStatus() {
   const user = await db.user.findUnique({
     where: { clerkUserId: userId },
   });
-
+  
   if (!user) throw new Error("User not found");
 
   try {
@@ -93,5 +94,16 @@ export async function getUserOnboardingStatus() {
   } catch (error) {
     console.error("Error checking onboarding status:", error);
     throw new Error("Failed to check onboarding status");
+  }
+}
+
+export async function test(){
+  const user = await db.test.create({
+    data:{
+      user:"atahar"
+    }
+  })
+  return {
+    user:user
   }
 }
