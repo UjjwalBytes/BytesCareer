@@ -30,10 +30,13 @@ const HeroSection = () => {
     <section className="w-full pt-36 md:pt-48 pb-10">
       <div className="space-y-6 text-center">
         <div className="space-y-6 mx-auto">
-          <h1 className="text-5xl font-bold md:text-6xl lg:text-7xl xl:text-8xl gradient-title animate-gradient">
-            BytesCareer Coach for
+          <h1 className="text-5xl font-bold md:text-6xl lg:text-7xl xl:text-8xl text-gray-900 tracking-tight">
+            CareerPilot
             <br />
-            Professional Success
+            <span className="text-4xl font-bold md:text-5xl lg:text-6xl xl:text-7xl">
+
+            Stop Guessing. Start Growing.
+            </span>
           </h1>
           <p className="mx-auto max-w-[600px] text-muted-foreground md:text-xl">
             Advance your career with personalized guidance, interview prep, and
@@ -51,7 +54,7 @@ const HeroSection = () => {
         <div className="hero-image-wrapper mt-5 md:mt-0">
           <div ref={imageRef} className="hero-image">
             <Image
-              src="/banner.jpeg"
+              src="/hero.jpg"
               width={1280}
               height={720}
               alt="Dashboard Preview"

@@ -1,122 +1,78 @@
 "use server";
 
 import { db } from "@/lib/prisma";
-import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
-export async function generateCoverLetter(data) {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+// 🔐 COMMON USER FETCH
+async function getCurrentUser() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("token")?.value;
+
+  if (!token) throw new Error("Unauthorized");
+
+  const decoded = verifyToken(token);
+  if (!decoded) throw new Error("Invalid token");
 
   const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
+    where: { id: decoded.id },
+    include: {
+      industryInsight: true,
+    },
   });
 
   if (!user) throw new Error("User not found");
 
+  return user;
+}
+
+// 🤖 AI INSIGHTS
+export const generateAIInsights = async (industry) => {
   const prompt = `
-    Write a professional cover letter for a ${data.jobTitle} position at ${
-    data.companyName
-  }.
-    
-    About the candidate:
-    - Industry: ${user.industry}
-    - Years of Experience: ${user.experience}
-    - Skills: ${user.skills?.join(", ")}
-    - Professional Background: ${user.bio}
-    
-    Job Description:
-    ${data.jobDescription}
-    
-    Requirements:
-    1. Use a professional, enthusiastic tone
-    2. Highlight relevant skills and experience
-    3. Show understanding of the company's needs
-    4. Keep it concise (max 400 words)
-    5. Use proper business letter formatting in markdown
-    6. Include specific examples of achievements
-    7. Relate candidate's background to job requirements
-    
-    Format the letter in markdown.
+    Analyze the current state of the ${industry} industry and provide insights in ONLY the following JSON format:
+    {
+      "salaryRanges": [
+        { "role": "string", "min": number, "max": number, "median": number, "location": "string" }
+      ],
+      "growthRate": number,
+      "demandLevel": "High" | "Medium" | "Low",
+      "topSkills": ["skill1", "skill2"],
+      "marketOutlook": "Positive" | "Neutral" | "Negative",
+      "keyTrends": ["trend1", "trend2"],
+      "recommendedSkills": ["skill1", "skill2"]
+    }
   `;
 
-  try {
-    const result = await model.generateContent(prompt);
-    const content = result.response.text().trim();
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+  const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
 
-    const coverLetter = await db.coverLetter.create({
-      data: {
-        content,
-        jobDescription: data.jobDescription,
-        companyName: data.companyName,
-        jobTitle: data.jobTitle,
-        status: "completed",
-        userId: user.id,
-      },
-    });
+  return JSON.parse(cleanedText);
+};
 
-    return coverLetter;
-  } catch (error) {
-    console.error("Error generating cover letter:", error.message);
-    throw new Error("Failed to generate cover letter");
+// 📊 GET INSIGHTS
+export async function getIndustryInsights() {
+  const user = await getCurrentUser();
+
+  // agar insights already hai
+  if (user.industryInsight) {
+    return user.industryInsight;
   }
-}
 
-export async function getCoverLetters() {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  // warna generate karo
+  const insights = await generateAIInsights(user.industry);
 
-  const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
-  });
-
-  if (!user) throw new Error("User not found");
-
-  return await db.coverLetter.findMany({
-    where: {
-      userId: user.id,
-    },
-    orderBy: {
-      createdAt: "desc",
+  const industryInsight = await db.industryInsight.create({
+    data: {
+      industry: user.industry,
+      ...insights,
+      nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
   });
-}
 
-export async function getCoverLetter(id) {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
-
-  const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
-  });
-
-  if (!user) throw new Error("User not found");
-
-  return await db.coverLetter.findUnique({
-    where: {
-      id,
-      userId: user.id,
-    },
-  });
-}
-
-export async function deleteCoverLetter(id) {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
-
-  const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
-  });
-
-  if (!user) throw new Error("User not found");
-
-  return await db.coverLetter.delete({
-    where: {
-      id,
-      userId: user.id,
-    },
-  });
+  return industryInsight;
 }

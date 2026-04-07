@@ -1,10 +1,10 @@
-// app/resume/_components/entry-form.jsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format, parse } from "date-fns";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,8 +15,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
 import { entrySchema } from "@/app/lib/schema";
-import { Sparkles, PlusCircle, X, Pencil, Save, Loader2 } from "lucide-react";
+import { Sparkles, PlusCircle, X, Loader2 } from "lucide-react";
 import { improveWithAI } from "@/actions/resume";
 import { toast } from "sonner";
 import useFetch from "@/hooks/use-fetch";
@@ -27,16 +28,16 @@ const formatDisplayDate = (dateString) => {
   return format(date, "MMM yyyy");
 };
 
-export function EntryForm({ type, entries, onChange }) {
+export function EntryForm({ type, entries = [], onChange }) {
   const [isAdding, setIsAdding] = useState(false);
 
   const {
     register,
-    handleSubmit: handleValidation,
-    formState: { errors },
+    handleSubmit,
     reset,
     watch,
     setValue,
+    formState: { errors },
   } = useForm({
     resolver: zodResolver(entrySchema),
     defaultValues: {
@@ -50,19 +51,32 @@ export function EntryForm({ type, entries, onChange }) {
   });
 
   const current = watch("current");
+  const startDate = watch("startDate");
 
-  const handleAdd = handleValidation((data) => {
+  const handleAdd = (data) => {
+    // ✅ Manual validation (for UX control)
+    if (!data.title || !data.organization || !data.startDate) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+
+    // ✅ Description optional only for Education
+    if (type !== "Education" && !data.description) {
+      toast.error("Description is required");
+      return;
+    }
+
     const formattedEntry = {
       ...data,
       startDate: formatDisplayDate(data.startDate),
       endDate: data.current ? "" : formatDisplayDate(data.endDate),
     };
 
-    onChange([...entries, formattedEntry]);
+    onChange([...(entries || []), formattedEntry]);
 
     reset();
     setIsAdding(false);
-  });
+  };
 
   const handleDelete = (index) => {
     const newEntries = entries.filter((_, i) => i !== index);
@@ -76,7 +90,6 @@ export function EntryForm({ type, entries, onChange }) {
     error: improveError,
   } = useFetch(improveWithAI);
 
-  // Add this effect to handle the improvement result
   useEffect(() => {
     if (improvedContent && !isImproving) {
       setValue("description", improvedContent);
@@ -87,9 +100,9 @@ export function EntryForm({ type, entries, onChange }) {
     }
   }, [improvedContent, improveError, isImproving, setValue]);
 
-  // Replace handleImproveDescription with this
   const handleImproveDescription = async () => {
     const description = watch("description");
+
     if (!description) {
       toast.error("Please enter a description first");
       return;
@@ -97,150 +110,151 @@ export function EntryForm({ type, entries, onChange }) {
 
     await improveWithAIFn({
       current: description,
-      type: type.toLowerCase(), // 'experience', 'education', or 'project'
+      type: type.toLowerCase(),
     });
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 bg-white text-black p-4 rounded-xl">
+
+      {/* Existing Entries */}
       <div className="space-y-4">
         {entries.map((item, index) => (
           <Card key={index}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                {item.title} @ {item.organization}
+            <CardHeader className="flex justify-between">
+              <CardTitle className="text-sm">
+                {item.title} | {item.organization}
               </CardTitle>
+
               <Button
-                variant="outline"
-                size="icon"
                 type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => handleDelete(index)}
               >
                 <X className="h-4 w-4" />
               </Button>
             </CardHeader>
+
             <CardContent>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-gray-500">
                 {item.current
                   ? `${item.startDate} - Present`
                   : `${item.startDate} - ${item.endDate}`}
               </p>
-              <p className="mt-2 text-sm whitespace-pre-wrap">
-                {item.description}
-              </p>
+
+              {/* ❌ Hide description in Education */}
+              {type !== "Education" && item.description && (
+                <p className="mt-2 text-sm whitespace-pre-wrap">
+                  {item.description}
+                </p>
+              )}
             </CardContent>
           </Card>
         ))}
       </div>
 
+      {/* Add Entry */}
       {isAdding && (
         <Card>
           <CardHeader>
             <CardTitle>Add {type}</CardTitle>
           </CardHeader>
+
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+
+              <div>
                 <Input
-                  placeholder="Title/Position"
+                  placeholder={
+                    type === "Education"
+                      ? "Course (e.g. BCA, MCA)"
+                      : "Title"
+                  }
                   {...register("title")}
-                  error={errors.title}
                 />
                 {errors.title && (
-                  <p className="text-sm text-red-500">{errors.title.message}</p>
+                  <p className="text-red-500 text-xs">Title is required</p>
                 )}
               </div>
-              <div className="space-y-2">
+
+              <div>
                 <Input
-                  placeholder="Organization/Company"
+                  placeholder={
+                    type === "Education"
+                      ? "College / University"
+                      : "Organization"
+                  }
                   {...register("organization")}
-                  error={errors.organization}
                 />
                 {errors.organization && (
-                  <p className="text-sm text-red-500">
-                    {errors.organization.message}
+                  <p className="text-red-500 text-xs">
+                    Organization is required
                   </p>
                 )}
               </div>
             </div>
 
+            {/* Dates */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Input
-                  type="month"
-                  {...register("startDate")}
-                  error={errors.startDate}
-                />
-                {errors.startDate && (
-                  <p className="text-sm text-red-500">
-                    {errors.startDate.message}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Input
-                  type="month"
-                  {...register("endDate")}
-                  disabled={current}
-                  error={errors.endDate}
-                />
-                {errors.endDate && (
-                  <p className="text-sm text-red-500">
-                    {errors.endDate.message}
-                  </p>
-                )}
-              </div>
+              <Input
+                type="month"
+                max={new Date().toISOString().slice(0, 7)}
+                {...register("startDate")}
+              />
+
+              <Input
+                type="month"
+                min={startDate || undefined}
+                {...register("endDate")}
+                disabled={current}
+              />
             </div>
 
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="current"
-                {...register("current")}
-                onChange={(e) => {
-                  setValue("current", e.target.checked);
-                  if (e.target.checked) {
-                    setValue("endDate", "");
-                  }
-                }}
-              />
-              <label htmlFor="current">Current {type}</label>
+            <div className="flex gap-2">
+              <input type="checkbox" {...register("current")} />
+              <label>Current {type}</label>
             </div>
 
-            <div className="space-y-2">
-              <Textarea
-                placeholder={`Description of your ${type.toLowerCase()}`}
-                className="h-32"
-                {...register("description")}
-                error={errors.description}
-              />
-              {errors.description && (
-                <p className="text-sm text-red-500">
-                  {errors.description.message}
-                </p>
-              )}
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleImproveDescription}
-              disabled={isImproving || !watch("description")}
-            >
-              {isImproving ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Improving...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Improve with AI
-                </>
-              )}
-            </Button>
+            {/* ✅ Description only for non-education */}
+            {type !== "Education" && (
+              <>
+                <Textarea
+                  placeholder="Description"
+                  {...register("description")}
+                />
+                {errors.description && (
+                  <p className="text-red-500 text-xs">
+                    Description is required
+                  </p>
+                )}
+              </>
+            )}
+
+            {/* ❌ Remove AI button for Education */}
+            {type !== "Education" && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleImproveDescription}
+                disabled={isImproving}
+              >
+                {isImproving ? (
+                  <>
+                    <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                    Improving...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Improve with AI
+                  </>
+                )}
+              </Button>
+            )}
           </CardContent>
-          <CardFooter className="flex justify-end space-x-2">
+
+          <CardFooter className="flex justify-end gap-2">
             <Button
               type="button"
               variant="outline"
@@ -251,7 +265,8 @@ export function EntryForm({ type, entries, onChange }) {
             >
               Cancel
             </Button>
-            <Button type="button" onClick={handleAdd}>
+
+            <Button type="button" onClick={handleSubmit(handleAdd)}>
               <PlusCircle className="h-4 w-4 mr-2" />
               Add Entry
             </Button>
@@ -260,11 +275,7 @@ export function EntryForm({ type, entries, onChange }) {
       )}
 
       {!isAdding && (
-        <Button
-          className="w-full"
-          variant="outline"
-          onClick={() => setIsAdding(true)}
-        >
+        <Button onClick={() => setIsAdding(true)} variant="outline">
           <PlusCircle className="h-4 w-4 mr-2" />
           Add {type}
         </Button>

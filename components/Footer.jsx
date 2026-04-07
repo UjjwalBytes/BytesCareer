@@ -12,8 +12,8 @@ export default function Footer() {
 
           {/* Brand */}
           <div className="text-center md:text-left">
-            <h2 className="text-xl font-bold">
-              Bytes<span className="text-primary">Career</span>
+            <h2 className="text-2xl font-bold">
+              Career<span className="text-primary">Pilot</span>
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
               AI-powered career growth platform 🚀
@@ -63,7 +63,7 @@ export default function Footer() {
 
         {/* Bottom Section */}
         <div className="mt-8 text-center text-xs text-muted-foreground border-t pt-4">
-          © {new Date().getFullYear()} BytesCareer. All rights reserved. || Made by - Ujjwal Kesharwani
+          © {new Date().getFullYear()}CareerPilot. All rights reserved. || Made by - Ujjwal Kesharwani
         </div>
       </div>
     </footer>

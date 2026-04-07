@@ -1,22 +1,39 @@
 "use server";
 
 import { db } from "@/lib/prisma";
-import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { revalidatePath } from "next/cache";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
-export async function saveResume(content) {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+// 🔐 COMMON USER
+async function getCurrentUser() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("token")?.value;
+
+  if (!token) throw new Error("Unauthorized");
+
+  const decoded = verifyToken(token);
+  if (!decoded) throw new Error("Invalid token");
 
   const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
+    where: { id: decoded.id },
+    include: {
+      industryInsight: true,
+    },
   });
 
   if (!user) throw new Error("User not found");
+
+  return user;
+}
+
+// 💾 SAVE RESUME
+export async function saveResume(content) {
+  const user = await getCurrentUser();
 
   try {
     const resume = await db.resume.upsert({
@@ -40,15 +57,9 @@ export async function saveResume(content) {
   }
 }
 
+// 📄 GET RESUME
 export async function getResume() {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
-
-  const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
-  });
-
-  if (!user) throw new Error("User not found");
+  const user = await getCurrentUser();
 
   return await db.resume.findUnique({
     where: {
@@ -57,39 +68,31 @@ export async function getResume() {
   });
 }
 
+// 🤖 IMPROVE WITH AI
 export async function improveWithAI({ current, type }) {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
-
-  const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
-    include: {
-      industryInsight: true,
-    },
-  });
-
-  if (!user) throw new Error("User not found");
+  const user = await getCurrentUser();
 
   const prompt = `
     As an expert resume writer, improve the following ${type} description for a ${user.industry} professional.
     Make it more impactful, quantifiable, and aligned with industry standards.
+
     Current content: "${current}"
 
     Requirements:
-    1. Use action verbs
-    2. Include metrics and results where possible
-    3. Highlight relevant technical skills
-    4. Keep it concise but detailed
-    5. Focus on achievements over responsibilities
-    6. Use industry-specific keywords
-    
-    Format the response as a single paragraph without any additional text or explanations.
+    - Use action verbs
+    - Add metrics/results
+    - Highlight skills
+    - Keep concise
+    - Focus on achievements
+    - Use industry keywords
+
+    Return only the improved paragraph.
   `;
 
   try {
     const result = await model.generateContent(prompt);
-    const response = result.response;
-    const improvedContent = response.text().trim();
+    const improvedContent = result.response.text().trim();
+
     return improvedContent;
   } catch (error) {
     console.error("Error improving content:", error);
